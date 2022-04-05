@@ -46,7 +46,7 @@ def create_app(test_config=None):
     for all available categories.
     """
 
-    @app.route('/categories')
+    @app.route('/categories', methods=['GET'])
     def get_categories():
         categories = Category.query.order_by(Category.id).all()
         formatted_categories = {}
@@ -60,7 +60,7 @@ def create_app(test_config=None):
             return jsonify({
                 'success': True,
                 'categories': formatted_categories,
-                'total categories': len(formatted_categories)
+                'totalCategories': len(formatted_categories)
             })
 
     """
@@ -76,7 +76,7 @@ def create_app(test_config=None):
     Clicking on the page numbers should update the questions.
     """
 
-    @app.route('/questions')
+    @app.route('/questions', methods=['GET'])
     def get_questions():
         questions = Question.query.order_by(Question.category).all()
         current_questions = paginate(request, questions)
@@ -110,16 +110,22 @@ def create_app(test_config=None):
     This removal will persist in the database and when you refresh the page.
     """
 
-    """
-    @TODO:
-    Create an endpoint to POST a new question,
-    which will require the question and answer text,
-    category, and difficulty score.
+    @app.route('/questions/<int:question_id>', methods=['DELETE'])
+    def delete_question(question_id):
+        try:
+            question = Question.query.filter(Question.id==question_id).one_or_none()
+            if question is None:
+                abort(404)
 
-    TEST: When you submit a question on the "Add" tab,
-    the form will clear and the question will appear at the end of the last page
-    of the questions list in the "List" tab.
-    """
+            question.delete()
+
+            return jsonify({
+                'success': True,
+                'deleted': question_id
+            })
+
+        except:
+            abort(422)
 
     """
     @TODO:
@@ -132,6 +138,51 @@ def create_app(test_config=None):
     Try using the word "title" to start.
     """
 
+    @app.route('/questions', methods=['POST'])
+    def search_create_questions():
+        form = request.get_json()
+        search_term = form.get('searchTerm', False)
+        if search_term:
+            questions = Question.query.filter(Question.question.ilike('%' + search_term + '%')).all()
+            current_questions = paginate(request, questions)
+            categories = {}
+            for question in questions:
+                category = Category.query.filter(Category.id==question.category).first()
+                if category.id not in categories:
+                    categories[category.id] = category.type
+            category_num = current_questions[0]['category']
+            category = Category.query.filter(Category.id==category_num).first()
+            category_type = category.type
+            return jsonify({
+                'success': True,
+                'questions': current_questions,
+                'totalQuestions': len(questions),
+                'currentCategory': category_type,
+                'categories': categories
+            })
+
+        else:
+            new_question = form.get('question', None)
+            new_answer = form.get('answer', None)
+            new_category = str(form.get('category', None))
+            new_difficulty = form.get('difficulty', None)
+
+            try:
+                new_question = Question(question=new_question, answer=new_answer,
+                                        category=new_category,
+                                        difficulty=new_difficulty)
+
+                new_question.insert()
+
+                return jsonify({
+                    'success': True,
+                    'created': new_question.id
+                })
+            except:
+                abort(422)
+
+
+
     """
     @TODO:
     Create a GET endpoint to get questions based on category.
@@ -140,6 +191,33 @@ def create_app(test_config=None):
     categories in the left column will cause only questions of that
     category to be shown.
     """
+
+    @app.route('/categories/<int:category_id>/questions', methods=['GET'])
+    def get_questions_by_category(category_id):
+        questions = Question.query.filter(Question.category == category_id).all()
+        current_questions = paginate(request, questions)
+        categories = {}
+        for question in questions:
+            category = Category.query.filter(Category.id==question.category).first()
+            if category.id not in categories:
+                categories[category.id] = category.type
+        category_num = current_questions[0]['category']
+        category = Category.query.filter(Category.id==category_num).first()
+        category_type = category.type
+
+        if len(current_questions) == 0:
+            abort(404)
+
+        else:
+            return jsonify({
+                'success': True,
+                'questions': current_questions,
+                'totalQuestions': len(questions),
+                'currentCategory': category_type,
+                'categories': categories
+            })
+
+
 
     """
     @TODO:
@@ -153,10 +231,38 @@ def create_app(test_config=None):
     and shown whether they were correct or not.
     """
 
+
     """
     @TODO:
     Create error handlers for all expected errors
     including 404 and 422.
     """
+
+
+    @app.errorhandler(404)
+    def not_found(error):
+        return (
+            jsonify({"success": False, "error": 404, "message": "resource not found"}),
+            404,
+        )
+
+    @app.errorhandler(422)
+    def unprocessable(error):
+        return (
+            jsonify({"success": False, "error": 422, "message": "unprocessable"}),
+            422,
+        )
+
+    @app.errorhandler(400)
+    def bad_request(error):
+        return jsonify({"success": False, "error": 400, "message": "bad request"}), 400
+
+    @app.errorhandler(405)
+    def not_found(error):
+        return (
+            jsonify({"success": False, "error": 405, "message": "method not allowed"}),
+            405,
+        )
+
 
     return app
