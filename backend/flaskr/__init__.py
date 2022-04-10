@@ -27,7 +27,7 @@ def create_app(test_config=None):
     @TODO: Set up CORS. Allow '*' for origins. Delete the sample route after completing the TODOs
     """
 
-    CORS(app, resources={r"/api/*":{"origins": '*'}})
+    CORS(app, resources={'/': {'origins': '*'}})
 
 
     """
@@ -76,15 +76,18 @@ def create_app(test_config=None):
     Clicking on the page numbers should update the questions.
     """
 
-    @app.route('/questions', methods=['GET'])
+    @app.route('/questions')
     def get_questions():
-        questions = Question.query.order_by(Question.category).all()
-        current_questions = paginate(request, questions)
-        categories = {}
-        for question in questions:
-            category = Category.query.filter(Category.id==question.category).first()
-            if category.id not in categories:
-                categories[category.id] = category.type
+        #query all questions and paginate
+        selection = Question.query.order_by(Question.category).all()
+        current_questions = paginate(request, selection)
+        totalQuestions = len(selection)
+
+        #query all categories & make dictionary
+        categories = Category.query.order_by(Category.type).all()
+        category_dict = {category.id: category.type for category in categories}
+
+        #get current category from first question present
         category_num = current_questions[0]['category']
         category = Category.query.filter(Category.id==category_num).first()
         category_type = category.type
@@ -92,14 +95,13 @@ def create_app(test_config=None):
         if len(current_questions) == 0:
             abort(404)
 
-        else:
-            return jsonify({
-                'success': True,
-                'questions': current_questions,
-                'totalQuestions': len(questions),
-                'currentCategory': category_type,
-                'categories': categories
-            })
+        return jsonify({
+            'success': True,
+            'questions': current_questions,
+            'total_questions': totalQuestions,
+            'current_category': category_type,
+            'categories': {category.id: category.type for category in categories},
+        })
 
 
     """
@@ -144,6 +146,8 @@ def create_app(test_config=None):
         search_term = form.get('searchTerm', False)
         if search_term:
             questions = Question.query.filter(Question.question.ilike('%' + search_term + '%')).all()
+            if len(questions) == 0:
+                abort(404)
             current_questions = paginate(request, questions)
             categories = {}
             for question in questions:
@@ -156,8 +160,8 @@ def create_app(test_config=None):
             return jsonify({
                 'success': True,
                 'questions': current_questions,
-                'totalQuestions': len(questions),
-                'currentCategory': category_type,
+                'total_questions': len(questions),
+                'current_category': category_type,
                 'categories': categories
             })
 
@@ -212,8 +216,8 @@ def create_app(test_config=None):
             return jsonify({
                 'success': True,
                 'questions': current_questions,
-                'totalQuestions': len(questions),
-                'currentCategory': category_type,
+                'total_questions': len(questions),
+                'current_category': category_type,
                 'categories': categories
             })
 
@@ -230,6 +234,27 @@ def create_app(test_config=None):
     one question at a time is displayed, the user is allowed to answer
     and shown whether they were correct or not.
     """
+
+    @app.route('/quizzes', methods=['POST'])
+    def get_quizzes():
+        #get request values of previous questions and quiz category
+        previous_questions = request.get_json().get('previous_questions')
+        quiz_category = request.get_json().get('quiz_category')
+
+        if previous_questions is None or quiz_category is None:
+            return abort(400)
+
+        if quiz_category['id'] == 0:
+            questions = Question.query.filter(Question.id.notin_(previous_questions)).all()
+        else:
+            questions = Question.query.filter(Question.category==quiz_category['id'], Question.id.notin_(previous_questions)).all()
+
+        if questions:
+            return jsonify({
+                'success': True,
+                'question': random.choice(questions).format()
+            })
+
 
 
     """
