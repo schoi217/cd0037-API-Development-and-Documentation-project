@@ -168,7 +168,8 @@ class TriviaTestCase(unittest.TestCase):
         self.assertEqual(data['success'], False)
         self.assertEqual(data['message'], 'bad request')
 
-
+    def end(self):
+        self.db.drop_all(self)
 
 
 # Make the tests conveniently executable
